@@ -1,0 +1,10 @@
+This is a learning/lab setup, not hardened for production — adapt secrets/credentials before reusing.
+
+## Things to Change
+PKI - Generate your own keys
+Stable Config - Change the user settings
+Drive Mounts - Configure as needed
+
+Make sure all file paths listed for the NixOS exist and are given correct permissions or the lab will not work.
+
+Licensed under PolyForm Noncommercial, allowing for using, copying, modifying, and distributing the work for any purpose except commercial use.
