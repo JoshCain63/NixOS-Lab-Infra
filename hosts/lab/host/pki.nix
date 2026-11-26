@@ -41,6 +41,16 @@
           {
             type = "JWK";
             name = "admin@lab.internal";
+            # win-srv01's LDAPS certificate is issued by hand: Windows has
+            # no ACME client here, so step-ca's 24-hour default silently
+            # expired it (issued 2026-06-13, dead 2026-06-14) and left
+            # Vault's LDAP engine unable to verify LDAPS. Allow long-lived
+            # certificates on this provisioner; containers still use ACME.
+            claims = {
+              minTLSCertDuration     = "5m";
+              defaultTLSCertDuration = "2160h";
+              maxTLSCertDuration     = "8760h";
+            };
             key = {
               use = "sig";
               kty = "EC";

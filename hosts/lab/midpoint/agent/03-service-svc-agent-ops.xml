@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The ops agent's identity. Set validTo (expiry) as needed; then, in the UI,
+  open an IT user and add an assignment to this service with relation
+  "Owner": that person is the agent's sponsor.
+
+  UNTESTED: import via Configuration > Import object.
+-->
+<service xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+         oid="7f1b8c2e-3a54-4d1e-9b6a-a1a9e0e0a902">
+    <name>svc-agent-ops</name>
+    <description>Ops agent on ag01: runs named diagnostics on lt01-lt04 via Boundary.</description>
+    <assignment>
+        <targetRef oid="7f1b8c2e-3a54-4d1e-9b6a-a1a9e0e0a901" type="ArchetypeType"/>
+    </assignment>
+    <activation>
+        <administrativeStatus>enabled</administrativeStatus>
+        <validTo>2027-02-08T00:00:00Z</validTo>
+    </activation>
+</service>

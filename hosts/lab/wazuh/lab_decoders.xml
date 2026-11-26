@@ -1,0 +1,59 @@
+<!--
+  Decoders for the lab's own JSON event streams.
+
+  Everything the lab sends to Wazuh is JSON, delivered over TCP syslog by
+  rsyslog (hosts/lab/containers/wazuh-forward.nix), and every rule in
+  lab_rules.xml selects on <decoded_as>json</decoded_as>.
+
+  Wazuh's built-in JSON decoder is
+
+      <decoder name="json">
+        <prematch>^{\s*"</prematch>
+        <plugin_decoder>JSON_Decoder</plugin_decoder>
+      </decoder>
+
+  and its prematch is anchored at the start of the line. A syslog-delivered
+  event does not start with '{' - it starts with the syslog header, e.g.
+
+      2026-11-23T20:23:55.354965-07:00 ai01 pam-review: {"event":"pam_review.auth",...}
+
+  so that decoder never fires. Without a decoder match, <decoded_as>json</…>
+  can never be satisfied and NONE of the 100xxx rules can match. Events were
+  arriving and landing on the catch-all rule 1002 "Unknown problem somewhere
+  in the system" with "decoder":{} empty.
+
+  These decoders select on the syslog program name (the rsyslog tag) and hand
+  the payload to the JSON plugin. They are deliberately all named "json" so the
+  existing <decoded_as>json</decoded_as> rules match unchanged - in Wazuh the
+  decoder *name* is what decoded_as compares against, and sibling decoders may
+  share a name.
+
+  One decoder per tag rather than one with alternation: <program_name> is
+  matched with OS_Regex, which has no grouped alternation (the same trap that
+  broke rules 100208/100209).
+-->
+
+<decoder name="json">
+  <program_name>^pam-review$</program_name>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<decoder name="json">
+  <program_name>^boundary$</program_name>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<decoder name="json">
+  <program_name>^ops-agent$</program_name>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<decoder name="json">
+  <program_name>^agent-gate$</program_name>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<decoder name="json">
+  <program_name>^vault$</program_name>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>

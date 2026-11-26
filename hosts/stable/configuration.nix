@@ -3,15 +3,25 @@
 {
   imports = [
     ./hardware-configuration.nix
+    ../../pkgs/claude_code.nix
   ];
 
   # Bootloader
   boot.loader.grub.enable = true;
   boot.loader.grub.theme = null;
   boot.loader.grub.splashImage = null;
-  boot.loader.grub.device = "/dev/sda";
+  boot.loader.grub.device = "/dev/disk/by-id/ata-Samsung_SSD_850_EVO_250GB_S21NNSAG327893X";
   boot.loader.grub.useOSProber = false;
-  boot.loader.grub.configurationLimit = 15;
+  boot.loader.grub.configurationLimit = 5;
+  # Keep GRUB in plain text mode. On BIOS, the graphical terminal (gfxterm
+  # over VBE) redraws very slowly, which causes menu freezes and buffered
+  # keystrokes that make the cursor jump. Without a font NixOS skips gfxterm.
+  boot.loader.grub.font = null;
+  boot.loader.grub.gfxpayloadBios = "text";
+  boot.loader.grub.extraConfig = ''
+    terminal_input console
+    terminal_output console
+  '';
   boot.loader.timeout = -1;
   boot.kernelParams = [ "pci=realloc" ];
   hardware.enableRedistributableFirmware = true;
@@ -55,21 +65,36 @@
       kdePackages.kate
       vim git curl wget
       virt-manager qemu
-      neofetch htop lm_sensors
+      fastfetch htop lm_sensors
+      joplin-desktop
     ];
   };
   users.groups.joshu = {};
 
+  # System-wide, not in users.users.joshu.packages: root and systemd
+  # units need it too, and a per-user profile path is what left the
+  # win-srv01 domain pointing at /etc/profiles/per-user/joshu/bin.
+  environment.systemPackages = with pkgs; [
+    python3
+    ungoogled-chromium
+  ];
+
   virtualisation.libvirtd.enable = true;
   programs.virt-manager.enable = true;
   programs.firefox.enable = true;
+
+  # programs.chromium has no `package` option - the module only writes
+  # enterprise policy files into /etc/chromium/policies, it does not install a
+  # browser. ungoogled-chromium itself is in environment.systemPackages above.
+  programs.chromium.enable = true;
+
   nixpkgs.config.allowUnfree = true;
 
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
   programs.bash = {
     interactiveShellInit = ''
-      neofetch
+      fastfetch
     '';
   };
 

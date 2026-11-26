@@ -1,0 +1,19 @@
+# Local indexer users. Upstream's demo users (kibanaro, logstash, readall,
+# snapshotrestore) are removed: their passwords are published. Hashes are
+# bcrypt, filled in at boot from passwords generated on hv01.
+---
+_meta:
+  type: "internalusers"
+  config_version: 2
+
+admin:
+  hash: "@ADMIN_HASH@"
+  reserved: true
+  backend_roles:
+  - "admin"
+  description: "Break-glass admin (SOC uses Keycloak)"
+
+kibanaserver:
+  hash: "@KIBANASERVER_HASH@"
+  reserved: true
+  description: "Wazuh dashboard service user"

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Recompute AI Agent services every 10 minutes, so a sponsor leaving (or an
+  agent expiring) reaches AD without waiting for a change on the service.
+
+  UNTESTED: import via Configuration > Import object; check the task under
+  Server tasks.
+-->
+<task xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+      xmlns:q="http://prism.evolveum.com/xml/ns/public/query-3"
+      oid="7f1b8c2e-3a54-4d1e-9b6a-a1a9e0e0a903">
+    <name>Recompute AI Agents</name>
+    <executionState>runnable</executionState>
+    <schedule>
+        <recurrence>recurring</recurrence>
+        <interval>600</interval>
+    </schedule>
+    <activity>
+        <work>
+            <recomputation>
+                <objects>
+                    <type>ServiceType</type>
+                    <query>
+                        <q:filter>
+                            <q:text>archetypeRef matches (oid = "7f1b8c2e-3a54-4d1e-9b6a-a1a9e0e0a901")</q:text>
+                        </q:filter>
+                    </query>
+                </objects>
+            </recomputation>
+        </work>
+    </activity>
+</task>

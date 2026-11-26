@@ -8,3 +8,20 @@ Drive Mounts - Configure as needed
 Make sure all file paths listed for the NixOS exist and are given correct permissions or the lab will not work.
 
 Licensed under PolyForm Noncommercial, allowing for using, copying, modifying, and distributing the work for any purpose except commercial use.
+## Vault & Boundary
+See docs/vault-boundary.md for hv01 (Vault), hb01 (Boundary) and the lt01-lt05 SSH targets, including the optional AD password rotation setup.
+
+## AI-assisted PAM review
+See docs/ai-pam.md for ai01 (local LLM) and how risky Boundary sessions are scored, reviewed and reported.
+
+## Wazuh (SOC)
+See docs/wazuh.md for wz01: pam-review findings and Boundary events as Wazuh alerts.
+
+## LLM security
+See docs/llm-security.md: how the AI PAM reviewer maps to the OWASP Top 10 for LLM Applications (2026).
+
+## Overview
+Start with docs/lab-overview.md: what was built, why, boot order, and the first-boot checklist.
+
+## Ops agent
+See docs/ops-agent.md: an AI non-human identity (ag01) running named tools, governed through midPoint, Keycloak, Vault, Boundary, pam-review and Wazuh.

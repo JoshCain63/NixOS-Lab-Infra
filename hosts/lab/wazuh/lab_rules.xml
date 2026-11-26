@@ -1,0 +1,423 @@
+<!--
+  Lab rules (IDs 100100-100419).
+
+  pam_review (100100-100199): findings from ai01, one JSON line each.
+    Alert levels come from the rule-based score band ONLY. The LLM's verdict
+    is carried as a field (llm.verdict, llm.summary) for the analyst, but it
+    never changes the level: otherwise the model is back in the decision path.
+
+  boundary (100200-100299): Boundary's own audit/observation events, sent
+    straight from hb01. An independent raw trail: it doesn't depend on ai01,
+    its findings file or its SQLite state, and it supports near-real-time rules.
+
+  vault (100400-100419): Vault's audit log, sent straight from hv01. Secret
+    values arrive HMAC'd; paths, callers, policies and addresses are clear.
+
+  Wazuh's built-in JSON decoder flattens fields (score.band,
+  data.request_info.path, ...).
+-->
+
+<group name="pam_review,">
+
+  <rule id="100100" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="event">^pam_review.finding$</field>
+    <description>PAM review: $(user.login_name) -> $(target.name) scored $(score.score) ($(score.band)), LLM: $(llm.verdict)</description>
+  </rule>
+
+  <!-- Score band -> level. Nothing else sets the level. -->
+  <rule id="100101" level="5">
+    <if_sid>100100</if_sid>
+    <field name="score.band">^medium$</field>
+    <description>PAM review: medium-risk session, $(user.login_name) -> $(target.name), score $(score.score), LLM: $(llm.verdict)</description>
+  </rule>
+
+  <rule id="100102" level="8">
+    <if_sid>100100</if_sid>
+    <field name="score.band">^high$</field>
+    <description>PAM review: high-risk session, $(user.login_name) -> $(target.name), score $(score.score), LLM: $(llm.verdict)</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <rule id="100103" level="12">
+    <if_sid>100100</if_sid>
+    <field name="score.band">^critical$</field>
+    <description>PAM review: critical-risk session, $(user.login_name) -> $(target.name), score $(score.score), LLM: $(llm.verdict)</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!-- Dedicated rule so the SOC can find these, at the SAME level as any
+       critical session: the model's disagreement doesn't lower or raise it. -->
+  <rule id="100106" level="12">
+    <if_sid>100103</if_sid>
+    <field name="llm.disagrees_with_score">^true$</field>
+    <description>PAM review: model cleared a critical session, $(user.login_name) -> $(target.name), score $(score.score); rules still say critical</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!-- Ops agent task findings (pam-review, from ag01's ledger): same rule —
+       the level comes from the score band only. -->
+  <rule id="100110" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="event">^pam_review.agent_task$</field>
+    <description>PAM review (agent): $(headline), score $(score.score) ($(score.band)), LLM: $(llm.verdict)</description>
+    <group>agent,</group>
+  </rule>
+
+  <rule id="100111" level="5">
+    <if_sid>100110</if_sid>
+    <field name="score.band">^medium$</field>
+    <description>PAM review (agent): medium-risk task, $(headline)</description>
+    <group>agent,</group>
+  </rule>
+
+  <rule id="100112" level="8">
+    <if_sid>100110</if_sid>
+    <field name="score.band">^high$</field>
+    <description>PAM review (agent): high-risk task, $(headline)</description>
+    <mitre>
+      <id>T1078.004</id>
+    </mitre>
+    <group>agent,</group>
+  </rule>
+
+  <rule id="100113" level="12">
+    <if_sid>100110</if_sid>
+    <field name="score.band">^critical$</field>
+    <description>PAM review (agent): critical-risk task, $(headline)</description>
+    <mitre>
+      <id>T1078.004</id>
+    </mitre>
+    <group>agent,</group>
+  </rule>
+
+  <!-- A Boundary session by the agent account that its ledger doesn't explain. -->
+  <rule id="100115" level="8">
+    <decoded_as>json</decoded_as>
+    <field name="event">^pam_review.agent_unaccounted$</field>
+    <description>PAM review (agent): $(headline)</description>
+    <group>agent,</group>
+  </rule>
+
+  <rule id="100116" level="12">
+    <if_sid>100115</if_sid>
+    <field name="score.band">^critical$</field>
+    <description>PAM review (agent): $(headline), score $(score.score)</description>
+    <group>agent,</group>
+  </rule>
+
+  <!-- pam-review's own login (it is a governed AI agent, svc-pam-review).
+       Written on change only. A failure means session review has STOPPED:
+       usually midPoint disabled the account (sponsor left, or expired). -->
+  <rule id="100120" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="event">^pam_review.auth$</field>
+    <description>PAM review login as $(account): $(status)</description>
+    <group>agent,</group>
+  </rule>
+
+  <rule id="100121" level="10">
+    <if_sid>100120</if_sid>
+    <status>^auth_failed$</status>
+    <description>PAM review can't log in as $(account) ($(stage)): session review has stopped. Sponsor left or expired?</description>
+    <group>agent,</group>
+  </rule>
+
+</group>
+
+<!--
+  agent_gate (100300-100309): decisions logged by the gate on lt01-lt05, sent
+  straight from each target. Independent of ag01 and pam-review.
+-->
+<group name="agent_gate,agent,">
+
+  <rule id="100300" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="event">^agent_gate$</field>
+    <description>Agent gate on $(host): $(tool) -> $(result)</description>
+  </rule>
+
+  <rule id="100301" level="10">
+    <if_sid>100300</if_sid>
+    <field name="result">^refused$</field>
+    <description>Agent gate on $(host) refused $(tool): $(reason)</description>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+  </rule>
+
+  <rule id="100302" level="12">
+    <if_sid>100301</if_sid>
+    <field name="reason">^approval_invalid$|^approval_replayed$</field>
+    <description>Agent gate on $(host): forged, altered or replayed approval for $(tool) ($(reason))</description>
+  </rule>
+
+  <rule id="100303" level="5">
+    <if_sid>100300</if_sid>
+    <field name="result">^executed$</field>
+    <description>Agent gate on $(host): approved Tier 1 action ran ($(request_id))</description>
+  </rule>
+
+</group>
+
+<!--
+  ops_agent (100310-100319): ag01's task ledger. Routine entries are archived
+  (level 2, below the alert threshold); the notable ones alert.
+-->
+<group name="ops_agent,agent,">
+
+  <rule id="100310" level="2">
+    <decoded_as>json</decoded_as>
+    <field name="event">^ops_agent.ledger$</field>
+    <description>Ops agent $(task_id): $(kind)</description>
+  </rule>
+
+  <!--
+    100311-100315 deliberately do NOT use <if_sid>100310</if_sid>.
+
+    100310 is level 2 so routine ledger entries stay archived rather than
+    alerting. But Wazuh's built-in catch-all rule 1002 ("Unknown problem
+    somewhere in the system") is ALSO level 2 and matches $BAD_WORDS, which
+    includes "denied", "refused", "failed" and "error". On a level tie
+    analysisd keeps rule 1002, so 100310 never became the matched rule and
+    none of its children were ever evaluated. Measured before this change:
+      kind=tool_call result=ok        -> 100310 (correct)
+      kind=tool_call result=denied    -> 1002   (100313 never fired)
+      kind=approval_granted           -> 100315 (correct)
+      kind=approval_denied            -> 1002   (100315 never fired)
+      kind=task_end  status=auth_failed -> 1002 (100312 never fired)
+    Repeating the parent's two conditions here lets each rule stand on its
+    own level, which outranks 1002, while 100310 keeps archiving the rest.
+  -->
+
+  <rule id="100311" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="event">^ops_agent.ledger$</field>
+    <field name="kind">^task_end$</field>
+    <description>Ops agent task $(task_id) ended: $(status)</description>
+  </rule>
+
+  <!-- Must stay <status>, not <field name="status">: status is one of Wazuh's
+       static fields and analysisd refuses to load the ruleset with
+       "Failure to read rule 100312. Field 'status' is static." The reason
+       100312 never fired was the rule-1002 tie on its grandparent, fixed above,
+       not this element. -->
+  <rule id="100312" level="10">
+    <if_sid>100311</if_sid>
+    <status>^auth_failed$</status>
+    <description>Ops agent could not log in ($(stage)): account disabled or expired? Task $(task_id)</description>
+  </rule>
+
+  <rule id="100313" level="8">
+    <decoded_as>json</decoded_as>
+    <field name="event">^ops_agent.ledger$</field>
+    <field name="kind">^tool_call$</field>
+    <field name="result">^denied$</field>
+    <description>Boundary denied the ops agent on $(host) (in scope: $(in_scope)), task $(task_id)</description>
+  </rule>
+
+  <rule id="100314" level="4">
+    <decoded_as>json</decoded_as>
+    <field name="event">^ops_agent.ledger$</field>
+    <field name="kind">^proposal$</field>
+    <description>Ops agent proposes $(tool) on $(host) ($(request_id)): awaiting human approval</description>
+  </rule>
+
+  <rule id="100315" level="5">
+    <decoded_as>json</decoded_as>
+    <field name="event">^ops_agent.ledger$</field>
+    <field name="kind">^approval_denied$|^approval_granted$</field>
+    <description>Ops agent proposal $(request_id): $(kind) by $(approver)</description>
+  </rule>
+
+</group>
+
+<group name="boundary,">
+
+  <!-- Any Boundary event from hb01's Wazuh sink (writes only; GETs are filtered out at the sink). -->
+  <rule id="100200" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="specversion">^1.0$</field>
+    <field name="source">boundary</field>
+    <description>Boundary $(type) event: $(data.request_info.method) $(data.request_info.path) -> $(data.status)</description>
+  </rule>
+
+  <rule id="100201" level="3">
+    <if_sid>100200</if_sid>
+    <field name="data.request_info.path">:authenticate$</field>
+    <field name="data.status">^2\d\d$</field>
+    <description>Boundary: successful login ($(data.request_info.path))</description>
+    <group>authentication_success,</group>
+  </rule>
+
+  <rule id="100202" level="5">
+    <if_sid>100200</if_sid>
+    <field name="data.request_info.path">:authenticate$</field>
+    <field name="data.status">^4\d\d$</field>
+    <description>Boundary: failed login ($(data.request_info.path) -> $(data.status))</description>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <rule id="100203" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100202</if_matched_sid>
+    <description>Boundary: 5 failed logins within 2 minutes</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failures,</group>
+  </rule>
+
+  <rule id="100204" level="3">
+    <if_sid>100200</if_sid>
+    <field name="data.request_info.path">:authorize-session$</field>
+    <field name="data.status">^2\d\d$</field>
+    <description>Boundary: session authorized ($(data.request_info.path))</description>
+  </rule>
+
+  <rule id="100205" level="7">
+    <if_sid>100200</if_sid>
+    <field name="data.request_info.path">:authorize-session$</field>
+    <field name="data.status">^4\d\d$</field>
+    <description>Boundary: session authorization denied ($(data.request_info.path) -> $(data.status))</description>
+  </rule>
+
+  <rule id="100206" level="10" frequency="3" timeframe="300">
+    <if_matched_sid>100205</if_matched_sid>
+    <description>Boundary: 3 denied session authorizations within 5 minutes</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <rule id="100207" level="5">
+    <if_sid>100200</if_sid>
+    <field name="data.request_info.path">:cancel$</field>
+    <description>Boundary: session cancelled ($(data.request_info.path))</description>
+  </rule>
+
+  <!-- Daily pam-reviewer rotation shows up here too; it's expected. -->
+  <rule id="100208" level="4">
+    <if_sid>100200</if_sid>
+    <field name="data.request_info.path" type="pcre2">:(set|change)-password$</field>
+    <description>Boundary: account password changed ($(data.request_info.path))</description>
+  </rule>
+
+  <rule id="100209" level="8">
+    <if_sid>100200</if_sid>
+    <!--
+      The negative lookahead matters. Boundary expresses custom actions as a
+      ":action" suffix on the collection path, so a plain login is
+        POST /v1/auth-methods/amldap_L2OmEhrD0T:authenticate
+      which matched "^/v1/auth-methods" + method POST and, at level 8 against
+      100202's level 5, won the event. Every login - success and failure -
+      was reported as an IAM/configuration change, and because 100202 then
+      never registered as the matching sid, 100203 ("5 failed logins within 2
+      minutes", T1110 brute force) could never fire at all. The same shadowing
+      hid 100204/100205 (:authorize-session), 100207 (:cancel) and 100208
+      (:set-password). Excluded here rather than reordered because Wazuh picks
+      the highest-level sibling match, not the first one.
+      Actions NOT in this list - :add-principals, :set-grants and friends - are
+      genuine IAM changes and still alert.
+    -->
+    <field name="data.request_info.path" type="pcre2">^/v1/(roles|auth-methods|accounts|users|managed-groups|credential-stores|credential-libraries|targets)(?!.*:(authenticate|authorize-session|cancel|set-password|change-password)$)</field>
+    <field name="data.request_info.method" type="pcre2">^(POST|PATCH|DELETE)$</field>
+    <description>Boundary: IAM/configuration change $(data.request_info.method) $(data.request_info.path)</description>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+  </rule>
+
+  <rule id="100210" level="7">
+    <if_sid>100200</if_sid>
+    <field name="type">^error$</field>
+    <description>Boundary: error event from $(source)</description>
+  </rule>
+
+</group>
+
+<!--
+  vault (100400-100419): Vault's file audit device on hv01. Each request is
+  logged twice (request, then response); only responses are ruled on, since
+  they carry the request and its outcome. Routine traffic (token renewals,
+  Boundary's KMS calls, OTP minting) stays at level 2: archived, no alert.
+  Children are checked in file order, so the most specific come first.
+-->
+<group name="vault,">
+
+  <rule id="100400" level="2">
+    <decoded_as>json</decoded_as>
+    <field name="type">^response$</field>
+    <field name="request.operation">\.+</field>
+    <field name="request.path">\.+</field>
+    <description>Vault: $(auth.display_name) $(request.operation) $(request.path)</description>
+  </rule>
+
+  <!-- Turning the audit trail off is the first thing an intruder would do. -->
+  <rule id="100401" level="12">
+    <if_sid>100400</if_sid>
+    <field name="request.path">^sys/audit</field>
+    <field name="request.operation">^delete$</field>
+    <description>Vault: audit device disabled by $(auth.display_name) ($(request.path))</description>
+    <mitre>
+      <id>T1562.008</id>
+    </mitre>
+  </rule>
+
+  <rule id="100402" level="5">
+    <if_sid>100400</if_sid>
+    <field name="error">\.+</field>
+    <description>Vault: $(request.operation) $(request.path) refused for $(auth.display_name) from $(request.remote_address): $(error)</description>
+  </rule>
+
+  <rule id="100403" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100402</if_matched_sid>
+    <description>Vault: 5 refused requests within 2 minutes</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!-- Policies, auth methods, mounts, audit devices, seal and root tokens.
+       vault-bootstrap's Terraform shows up here when the config changes. -->
+  <rule id="100404" level="8">
+    <if_sid>100400</if_sid>
+    <field name="request.path" type="pcre2">^(sys/(policy|policies|auth|mounts|audit|seal|generate-root|rotate|raw)|auth/\S+/role/)</field>
+    <field name="request.operation" type="pcre2">^(create|update|delete)$</field>
+    <description>Vault: configuration change by $(auth.display_name): $(request.operation) $(request.path)</description>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+  </rule>
+
+  <!-- A human approving an ops agent action: who signed is the evidence. -->
+  <rule id="100405" level="5">
+    <if_sid>100400</if_sid>
+    <field name="request.path">^transit/sign/agent-approvals</field>
+    <description>Vault: ops agent approval signed by $(auth.display_name)</description>
+    <group>agent,</group>
+  </rule>
+
+  <!-- Credential checkout: someone read a Vault-owned AD password. -->
+  <rule id="100406" level="3">
+    <if_sid>100400</if_sid>
+    <field name="request.path">^ldap/static-cred/</field>
+    <field name="request.operation">^read$</field>
+    <description>Vault: $(auth.display_name) read AD credential $(request.path) from $(request.remote_address)</description>
+  </rule>
+
+  <!-- The root token is break-glass. vault-bootstrap and hv01's timers use it
+       too (boot, hourly key export, weekly rotate-root), so this is a low-level
+       record; anything else using it stands out by time and path. -->
+  <rule id="100407" level="4">
+    <if_sid>100400</if_sid>
+    <field name="auth.display_name">^root$</field>
+    <description>Vault: root token used: $(request.operation) $(request.path)</description>
+  </rule>
+
+</group>

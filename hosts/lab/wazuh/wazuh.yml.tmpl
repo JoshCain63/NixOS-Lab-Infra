@@ -1,0 +1,9 @@
+# Wazuh dashboard -> manager API. run_as passes the logged-in user's backend
+# roles (Keycloak groups) to the API, where "IT" maps to administrator.
+hosts:
+  - lab:
+      url: "https://wazuh.manager"
+      port: 55000
+      username: wazuh-wui
+      password: "@API_PASSWORD@"
+      run_as: true

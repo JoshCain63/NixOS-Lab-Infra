@@ -61,8 +61,10 @@ in
     provider = "keycloak-oidc";
 
     clientID     = "oauth2-proxy";
-    clientSecret = "fYLAry2O6YgHZuR211cpglKYNmYQo8Qt";
-    cookie.secret = "5UHhOGxJtkOwWXI2qovLaRcNJQCSGCcj1okT2s4ggeA=";
+    # 26.05 only accepts secrets as files. These are lab-only values (they end
+    # up in the world-readable Nix store); replace them before reusing anywhere.
+    clientSecretFile = pkgs.writeText "oauth2-proxy-client-secret" "fYLAry2O6YgHZuR211cpglKYNmYQo8Qt";
+    cookie.secretFile = pkgs.writeText "oauth2-proxy-cookie-secret" "5UHhOGxJtkOwWXI2qovLaRcNJQCSGCcj1okT2s4ggeA=";
 
     email.domains = [ "*" ];
     httpAddress   = "127.0.0.1:4180";

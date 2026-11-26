@@ -192,6 +192,15 @@ in
   users.users.hr = { isSystemUser = true; group = "hr"; };
   users.groups.hr = {};
 
+  # Editing employees.csv from the host with sudo (which is what the testing
+  # runbook's scenario 2 tells you to do) leaves it owned by root, and the
+  # simulator then dies with PermissionError on every Deactivate / Hire -
+  # which looks exactly like "the HR pipeline is broken". Put the ownership
+  # back on every boot so a stray sudo edit cannot disable the app for good.
+  systemd.tmpfiles.rules = [
+    "z /var/lib/hr/employees.csv 0644 hr hr -"
+  ];
+
   systemd.services.hr-simulator = {
     description = "HR Simulator — CSV source of truth for MidPoint";
     wantedBy    = [ "multi-user.target" ];

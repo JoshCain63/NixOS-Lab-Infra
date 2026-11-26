@@ -1,0 +1,41 @@
+# OpenSearch security plugin auth config for the Wazuh indexer.
+# Local users first (kibanaserver, and admin for break-glass), then Keycloak
+# OIDC: the AD department arrives in the "groups" claim and is used as the
+# backend role (see roles_mapping.yml: IT -> all_access).
+---
+_meta:
+  type: "config"
+  config_version: 2
+config:
+  dynamic:
+    http:
+      anonymous_auth_enabled: false
+    authc:
+      basic_internal_auth_domain:
+        description: "Local users (kibanaserver, break-glass admin)"
+        http_enabled: true
+        transport_enabled: true
+        order: 0
+        http_authenticator:
+          type: basic
+          challenge: false
+        authentication_backend:
+          type: intern
+      openid_auth_domain:
+        description: "Keycloak realm lab"
+        http_enabled: true
+        transport_enabled: true
+        order: 1
+        http_authenticator:
+          type: openid
+          challenge: false
+          config:
+            subject_key: preferred_username
+            roles_key: groups
+            openid_connect_url: "https://idp01.lab.internal/realms/lab/.well-known/openid-configuration"
+            openid_connect_idp:
+              enable_ssl: true
+              verify_hostnames: true
+              pemtrustedcas_filepath: "/usr/share/wazuh-indexer/config/certs/lab-root-ca.pem"
+        authentication_backend:
+          type: noop

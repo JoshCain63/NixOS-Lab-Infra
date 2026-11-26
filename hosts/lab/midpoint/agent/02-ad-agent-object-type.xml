@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Add this <objectType> to your AD resource's <schemaHandling> (alongside the
+  existing account type for Lab Users). It provisions AI Agent services to
+  OU=AI Agents and carries the lifecycle rule:
+
+    enabled  <=>  the service is effectively enabled (not past validTo)
+                  AND at least one owner (sponsor) is active.
+
+  When HR terminates the sponsor, midPoint disables them; the recompute task
+  (04-task-recompute-ai-agents.xml) then re-evaluates the agent and disables
+  its AD account, so its next Boundary (LDAP) login fails.
+
+  Vault, not midPoint, owns the password after creation (LDAP secrets engine,
+  static role svc-agent-ops), so midPoint only sets a random initial one.
+
+  Attribute names were verified against the live connector schema (ri:dn,
+  ri:sAMAccountName, ri:userPrincipalName, ri:description all present).
+  NOTE: midpoint.searchObjects returns UserType, not PrismObject<UserType>,
+  so the sponsor check must NOT call asObjectable() - doing so threw
+  MissingMethodException and created both agents DISABLED (UAC 514).
+  Older note: adjust
+  them to match your existing Lab Users object type.
+-->
+<objectType xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+            xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+            xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3"
+            xmlns:q="http://prism.evolveum.com/xml/ns/public/query-3"
+            xmlns:org="http://midpoint.evolveum.com/xml/ns/public/common/org-3">
+    <kind>account</kind>
+    <intent>agent</intent>
+    <displayName>AI agent account</displayName>
+    <delineation>
+        <objectClass>ri:user</objectClass>
+        <baseContext>
+            <objectClass>ri:organizationalUnit</objectClass>
+            <filter>
+                <q:text>attributes/dn = "OU=AI Agents,DC=ad,DC=lab,DC=internal"</q:text>
+            </filter>
+        </baseContext>
+    </delineation>
+    <focus>
+        <type>c:ServiceType</type>
+        <archetypeRef oid="7f1b8c2e-3a54-4d1e-9b6a-a1a9e0e0a901"/>
+    </focus>
+    <attribute>
+        <ref>ri:dn</ref>
+        <outbound>
+            <strength>strong</strength>
+            <source><path>$focus/name</path></source>
+            <expression>
+                <script>
+                    <code>'CN=' + basic.stringify(name) + ',OU=AI Agents,DC=ad,DC=lab,DC=internal'</code>
+                </script>
+            </expression>
+        </outbound>
+    </attribute>
+    <attribute>
+        <ref>ri:sAMAccountName</ref>
+        <outbound>
+            <strength>strong</strength>
+            <source><path>$focus/name</path></source>
+        </outbound>
+    </attribute>
+    <attribute>
+        <ref>ri:userPrincipalName</ref>
+        <outbound>
+            <strength>strong</strength>
+            <source><path>$focus/name</path></source>
+            <expression>
+                <script><code>basic.stringify(name) + '@ad.lab.internal'</code></script>
+            </expression>
+        </outbound>
+    </attribute>
+    <attribute>
+        <ref>ri:description</ref>
+        <outbound>
+            <strength>strong</strength>
+            <expression>
+                <value>AI agent (non-human identity), governed by midPoint archetype AI Agent</value>
+            </expression>
+        </outbound>
+    </attribute>
+    <correlation>
+        <correlators>
+            <items>
+                <item><ref>name</ref></item>
+            </items>
+        </correlators>
+    </correlation>
+    <activation>
+        <administrativeStatus>
+            <outbound>
+                <name>agent-lifecycle</name>
+                <strength>strong</strength>
+                <source>
+                    <!-- effectiveStatus already includes validTo (expiry). -->
+                    <path>$focus/activation/effectiveStatus</path>
+                </source>
+                <expression>
+                    <script>
+                        <code>
+                            import com.evolveum.midpoint.xml.ns._public.common.common_3.*
+                            import com.evolveum.midpoint.schema.constants.SchemaConstants
+
+                            if (effectiveStatus != ActivationStatusType.ENABLED) {
+                                return ActivationStatusType.DISABLED      // expired or disabled
+                            }
+                            // Sponsors = users holding an owner assignment to this service.
+                            def ownerRef = prismContext.itemFactory()
+                                    .createReferenceValue(focus.oid, ServiceType.COMPLEX_TYPE)
+                            ownerRef.setRelation(SchemaConstants.ORG_OWNER)
+                            def query = prismContext.queryFor(UserType.class)
+                                    .item(UserType.F_ROLE_MEMBERSHIP_REF).ref(ownerRef)
+                                    .build()
+                            def owners = midpoint.searchObjects(UserType.class, query, null)
+                            def active = owners.any {
+                                it.activation?.effectiveStatus == ActivationStatusType.ENABLED
+                            }
+                            return active ? ActivationStatusType.ENABLED : ActivationStatusType.DISABLED
+                        </code>
+                    </script>
+                </expression>
+            </outbound>
+        </administrativeStatus>
+    </activation>
+    <credentials>
+        <password>
+            <outbound>
+                <!-- Initial random password only; Vault rotates it from then on. -->
+                <strength>weak</strength>
+                <expression>
+                    <generate/>
+                </expression>
+            </outbound>
+        </password>
+    </credentials>
+</objectType>

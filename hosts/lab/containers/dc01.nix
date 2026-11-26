@@ -1,4 +1,8 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
+
+let
+  targets = import ../targets.nix;
+in
 {
   networking.hostName = "dc01";
   networking.defaultGateway = "192.168.100.1";
@@ -25,10 +29,15 @@
           ''"bh01.lab.internal. A 192.168.100.14"''
           ''"tp01.lab.internal. A 192.168.100.15"''
           ''"hr01.lab.internal. A 192.168.100.16"''
+          ''"hv01.lab.internal. A 192.168.100.17"''
+          ''"hb01.lab.internal. A 192.168.100.18"''
+          ''"ai01.lab.internal. A 192.168.100.19"''
+          ''"wz01.lab.internal. A 192.168.100.20"''
+          ''"ag01.lab.internal. A 192.168.100.21"''
           ''"whoami.lab.internal. A 192.168.100.12"''
           ''"pki.lab.internal. A 192.168.100.1"''
           ''"win-srv01.ad.lab.internal. A 192.168.100.22"''
-        ];
+        ] ++ lib.mapAttrsToList (name: t: ''"${name}.lab.internal. A ${t.ip}"'') targets;
       };
       forward-zone = [
         {

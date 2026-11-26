@@ -11,6 +11,15 @@ let
 in
 
 {
+  # Vault-rotated svc-midpoint password, mounted into midPoint at
+  # /run/secrets/svc-midpoint for its Docker secrets provider.
+  imports = [
+    (import ./vault-agent.nix {
+      account = "svc-midpoint";
+      destination = "/run/midpoint-secrets/svc-midpoint";
+    })
+  ];
+
   # --- System & Networking ---
   system.stateVersion = "25.11";
 
@@ -177,6 +186,7 @@ in
     volumes = [
       "/opt/midpoint/var:/opt/midpoint/var"
       "/srv/hr:/opt/midpoint/var/hr"
+      "/run/midpoint-secrets:/run/secrets:ro"
     ];
 
     extraOptions = [

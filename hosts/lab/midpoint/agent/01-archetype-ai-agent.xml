@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AI Agent archetype (midPoint 4.10): a non-human identity on ServiceType.
+  Every AI Agent gets an AD account (kind account, intent "agent") in
+  OU=AI Agents. Its sponsor is an *owner* (relation org:owner) of the service;
+  the AD account is enabled only while the service is valid (activation/validTo)
+  AND has at least one active owner (see 02-ad-agent-object-type.xml).
+
+  UNTESTED: import via Configuration > Import object, then review in the UI.
+-->
+<archetype xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+           xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+           xmlns:org="http://midpoint.evolveum.com/xml/ns/public/common/org-3"
+           oid="7f1b8c2e-3a54-4d1e-9b6a-a1a9e0e0a901">
+    <name>AI Agent</name>
+    <description>Non-human identity: an AI agent with a human sponsor (owner) and an expiry.</description>
+    <archetypePolicy>
+        <display>
+            <label>AI Agent</label>
+            <pluralLabel>AI Agents</pluralLabel>
+            <icon>
+                <cssClass>fa fa-robot</cssClass>
+                <color>#8B5A2B</color>
+            </icon>
+        </display>
+    </archetypePolicy>
+    <assignment>
+        <!-- This archetype applies to services only. -->
+        <assignmentRelation>
+            <holderType>ServiceType</holderType>
+        </assignmentRelation>
+    </assignment>
+    <inducement>
+        <!-- Every AI Agent gets an AD account of the "agent" type. -->
+        <construction>
+            <!-- Your AD resource's OID (Resources > AD > Details). -->
+            <resourceRef oid="REPLACE-WITH-AD-RESOURCE-OID" type="c:ResourceType"/>
+            <kind>account</kind>
+            <intent>agent</intent>
+        </construction>
+    </inducement>
+</archetype>
